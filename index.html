@@ -1,0 +1,812 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Galley — Ship Menus</title>
+
+<link rel="manifest" href="./manifest.webmanifest">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Galley">
+<link rel="apple-touch-icon" href="./icon-180.png">
+<meta name="theme-color" content="#0C1A28">
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Marcellus&display=swap" rel="stylesheet">
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+
+<style>
+:root {
+  --ocean: #0C1A28;
+  --hull: #14283A;
+  --hull-edge: #22405A;
+  --foam: #E9EFF3;
+  --mist: #8FA3B5;
+  --brass: #C9A227;
+  --brass-dim: #8A701F;
+  --port: #E0524D;
+  --stbd: #3FA66A;
+  --mid: #8FA3B5;
+  --danger: #E0524D;
+  --radius: 12px;
+  --safe-b: env(safe-area-inset-bottom, 0px);
+  --safe-t: env(safe-area-inset-top, 0px);
+}
+* { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+html, body { margin: 0; padding: 0; }
+body {
+  background: var(--ocean);
+  color: var(--foam);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  font-size: 16px;
+  line-height: 1.45;
+  min-height: 100vh;
+  overscroll-behavior-y: none;
+}
+.display { font-family: "Marcellus", Georgia, serif; }
+.mono { font-family: ui-monospace, "SF Mono", Menlo, monospace; }
+
+/* ---------- Header ---------- */
+header {
+  position: sticky; top: 0; z-index: 20;
+  background: linear-gradient(to bottom, var(--ocean) 75%, rgba(12,26,40,0.92));
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  padding: calc(var(--safe-t) + 14px) 16px 10px;
+  border-bottom: 1px solid var(--hull-edge);
+}
+.masthead { display: flex; align-items: baseline; justify-content: space-between; }
+.masthead h1 {
+  font-family: "Marcellus", Georgia, serif;
+  font-size: 22px; font-weight: 400;
+  letter-spacing: 0.22em; text-transform: uppercase;
+  margin: 0; color: var(--foam);
+}
+.masthead h1::after {
+  content: ""; display: block; height: 1px; margin-top: 4px;
+  background: linear-gradient(to right, var(--brass), transparent 80%);
+}
+.ship-name {
+  font-size: 11px; letter-spacing: 0.14em; text-transform: uppercase;
+  color: var(--mist); margin: 4px 0 0;
+}
+.header-actions { display: flex; gap: 8px; }
+.icon-btn {
+  background: none; border: 1px solid var(--hull-edge); color: var(--mist);
+  border-radius: 8px; padding: 6px 10px; font-size: 13px; cursor: pointer;
+}
+.icon-btn:active { border-color: var(--brass); color: var(--brass); }
+
+.search-row { margin-top: 12px; }
+#search {
+  width: 100%; padding: 10px 14px;
+  background: var(--hull); border: 1px solid var(--hull-edge);
+  border-radius: 10px; color: var(--foam); font-size: 16px;
+  outline: none; appearance: none;
+}
+#search::placeholder { color: var(--mist); }
+#search:focus { border-color: var(--brass); }
+
+.chips {
+  display: flex; gap: 8px; overflow-x: auto; padding: 12px 0 2px;
+  scrollbar-width: none; -webkit-overflow-scrolling: touch;
+}
+.chips::-webkit-scrollbar { display: none; }
+.chip {
+  flex: 0 0 auto; padding: 6px 14px; border-radius: 999px;
+  border: 1px solid var(--hull-edge); background: none;
+  color: var(--mist); font-size: 13px; letter-spacing: 0.04em; cursor: pointer;
+}
+.chip.active { border-color: var(--brass); color: var(--brass); }
+
+/* ---------- Sections & cards ---------- */
+main { padding: 8px 16px calc(120px + var(--safe-b)); }
+.section-label {
+  display: flex; align-items: center; gap: 12px;
+  margin: 22px 0 12px;
+  font-family: "Marcellus", Georgia, serif;
+  font-size: 13px; letter-spacing: 0.24em; text-transform: uppercase;
+  color: var(--brass);
+}
+.section-label::after {
+  content: ""; flex: 1; height: 1px;
+  background: linear-gradient(to right, var(--brass), transparent);
+  opacity: 0.5;
+}
+.grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+@media (min-width: 640px) { .grid { grid-template-columns: repeat(3, 1fr); } }
+@media (min-width: 980px) { .grid { grid-template-columns: repeat(4, 1fr); } }
+
+.card {
+  background: var(--hull); border: 1px solid var(--hull-edge);
+  border-radius: var(--radius); padding: 14px;
+  display: flex; flex-direction: column; gap: 10px;
+  min-height: 110px; cursor: pointer;
+  transition: border-color 0.15s ease;
+  position: relative;
+}
+.card:active { border-color: var(--brass); }
+.card .name {
+  font-family: "Marcellus", Georgia, serif;
+  font-size: 17px; line-height: 1.25; color: var(--foam);
+  word-break: break-word; padding-right: 24px;
+}
+.card .meta {
+  margin-top: auto; display: flex; align-items: center; gap: 10px;
+  font-size: 11.5px; color: var(--mist);
+}
+.deck-tag {
+  font-family: ui-monospace, "SF Mono", Menlo, monospace;
+  letter-spacing: 0.08em; text-transform: uppercase;
+}
+.side-tag { display: inline-flex; align-items: center; gap: 5px; letter-spacing: 0.06em; text-transform: uppercase; }
+.light { width: 7px; height: 7px; border-radius: 50%; flex: 0 0 auto; }
+.light.port { background: var(--port); box-shadow: 0 0 6px rgba(224,82,77,0.7); }
+.light.starboard { background: var(--stbd); box-shadow: 0 0 6px rgba(63,166,106,0.7); }
+.light.midship { background: var(--mid); box-shadow: 0 0 5px rgba(143,163,181,0.5); }
+.card .more {
+  position: absolute; top: 6px; right: 4px;
+  background: none; border: none; color: var(--mist);
+  font-size: 18px; padding: 4px 10px; cursor: pointer; line-height: 1;
+}
+.card .notes-line {
+  font-size: 12px; color: var(--mist); line-height: 1.35;
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+}
+
+/* ---------- Empty state ---------- */
+.empty {
+  text-align: center; padding: 70px 24px; color: var(--mist);
+}
+.empty .display { font-size: 20px; color: var(--foam); margin-bottom: 10px; }
+.empty p { font-size: 14px; max-width: 320px; margin: 8px auto; }
+.empty .light-row { display: flex; justify-content: center; gap: 14px; margin-bottom: 20px; }
+.empty .light { width: 10px; height: 10px; }
+
+/* ---------- FAB ---------- */
+#fab {
+  position: fixed; right: 16px; bottom: calc(20px + var(--safe-b)); z-index: 30;
+  background: var(--brass); color: #16202b; border: none;
+  border-radius: 999px; padding: 14px 22px;
+  font-size: 15px; font-weight: 600; letter-spacing: 0.02em;
+  box-shadow: 0 6px 20px rgba(0,0,0,0.45); cursor: pointer;
+}
+#fab:active { transform: scale(0.97); }
+
+/* ---------- Sheets (bottom modals) ---------- */
+.scrim {
+  position: fixed; inset: 0; background: rgba(4,10,16,0.6); z-index: 40;
+  opacity: 0; pointer-events: none; transition: opacity 0.2s ease;
+}
+.scrim.open { opacity: 1; pointer-events: auto; }
+.sheet {
+  position: fixed; left: 0; right: 0; bottom: 0; z-index: 50;
+  background: var(--hull); border-top: 1px solid var(--hull-edge);
+  border-radius: 18px 18px 0 0;
+  padding: 18px 18px calc(18px + var(--safe-b));
+  transform: translateY(105%); transition: transform 0.25s ease;
+  max-height: 86vh; overflow-y: auto; -webkit-overflow-scrolling: touch;
+}
+.sheet.open { transform: translateY(0); }
+.sheet h2 {
+  font-family: "Marcellus", Georgia, serif; font-weight: 400;
+  font-size: 18px; letter-spacing: 0.12em; text-transform: uppercase;
+  margin: 0 0 16px; color: var(--brass);
+}
+.field { margin-bottom: 14px; }
+.field label {
+  display: block; font-size: 12px; letter-spacing: 0.08em;
+  text-transform: uppercase; color: var(--mist); margin-bottom: 6px;
+}
+.field input[type="text"], .field input[type="url"], .field input[type="number"],
+.field select, .field textarea {
+  width: 100%; padding: 11px 12px;
+  background: var(--ocean); border: 1px solid var(--hull-edge);
+  border-radius: 10px; color: var(--foam); font-size: 16px;
+  outline: none; appearance: none; font-family: inherit;
+}
+.field select {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%238FA3B5' stroke-width='1.5' fill='none'/%3E%3C/svg%3E");
+  background-repeat: no-repeat; background-position: right 12px center;
+}
+.field input:focus, .field select:focus, .field textarea:focus { border-color: var(--brass); }
+.field-row { display: flex; gap: 10px; }
+.field-row .field { flex: 1; }
+textarea { resize: vertical; min-height: 60px; }
+
+.pdf-pick { display: flex; flex-direction: column; gap: 10px; }
+.pdf-pick .status { font-size: 13px; color: var(--mist); }
+.pdf-pick .status.ok { color: var(--stbd); }
+.btn {
+  display: block; width: 100%; padding: 13px;
+  border-radius: 10px; font-size: 15px; font-weight: 600;
+  border: 1px solid var(--hull-edge); background: var(--ocean);
+  color: var(--foam); cursor: pointer; text-align: center;
+}
+.btn.primary { background: var(--brass); border-color: var(--brass); color: #16202b; }
+.btn.danger { color: var(--danger); border-color: rgba(224,82,77,0.4); }
+.btn:active { opacity: 0.85; }
+.btn + .btn { margin-top: 10px; }
+.btn-row { display: flex; gap: 10px; margin-top: 18px; }
+.btn-row .btn { flex: 1; margin: 0; }
+.hint { font-size: 12.5px; color: var(--mist); line-height: 1.45; margin: 8px 0 0; }
+.divider-or {
+  display: flex; align-items: center; gap: 10px; color: var(--mist);
+  font-size: 11px; letter-spacing: 0.15em; text-transform: uppercase; margin: 4px 0;
+}
+.divider-or::before, .divider-or::after { content: ""; flex: 1; height: 1px; background: var(--hull-edge); }
+.url-row { display: flex; gap: 8px; }
+.url-row input { flex: 1; }
+.url-row .btn { width: auto; padding: 11px 16px; }
+
+/* ---------- Action sheet ---------- */
+.action-sheet .btn { margin-top: 10px; }
+.action-sheet .venue-title {
+  font-family: "Marcellus", Georgia, serif; font-size: 17px;
+  color: var(--foam); margin-bottom: 4px;
+}
+.action-sheet .venue-sub { font-size: 12px; color: var(--mist); margin-bottom: 14px; }
+
+/* ---------- Viewer ---------- */
+#viewer {
+  position: fixed; inset: 0; z-index: 60; background: #0a141f;
+  display: none; flex-direction: column;
+}
+#viewer.open { display: flex; }
+.viewer-bar {
+  display: flex; align-items: center; gap: 10px;
+  padding: calc(var(--safe-t) + 10px) 14px 10px;
+  background: var(--ocean); border-bottom: 1px solid var(--hull-edge);
+  flex: 0 0 auto;
+}
+.viewer-bar .vname {
+  flex: 1; font-family: "Marcellus", Georgia, serif; font-size: 16px;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.viewer-pages {
+  flex: 1; overflow-y: auto; -webkit-overflow-scrolling: touch;
+  padding: 12px 8px calc(20px + var(--safe-b)); text-align: center;
+}
+.viewer-pages canvas {
+  display: block; margin: 0 auto 12px; max-width: 100%;
+  border-radius: 4px; background: #fff;
+  box-shadow: 0 2px 12px rgba(0,0,0,0.5);
+}
+.viewer-status { color: var(--mist); padding: 30px; font-size: 14px; }
+
+/* ---------- Toast ---------- */
+#toast {
+  position: fixed; left: 50%; bottom: calc(90px + var(--safe-b));
+  transform: translateX(-50%) translateY(20px); z-index: 70;
+  background: var(--hull); border: 1px solid var(--brass);
+  color: var(--foam); padding: 10px 18px; border-radius: 10px;
+  font-size: 14px; opacity: 0; pointer-events: none;
+  transition: opacity 0.2s, transform 0.2s; max-width: 86vw; text-align: center;
+}
+#toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+@media (prefers-reduced-motion: reduce) {
+  * { transition: none !important; }
+}
+:focus-visible { outline: 2px solid var(--brass); outline-offset: 2px; }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="masthead">
+    <div>
+      <h1>Galley</h1>
+      <p class="ship-name">MSC World Europa</p>
+    </div>
+    <div class="header-actions">
+      <button class="icon-btn" id="btn-export" aria-label="Export all menus">Export</button>
+      <button class="icon-btn" id="btn-import" aria-label="Import menus">Import</button>
+    </div>
+  </div>
+  <div class="search-row">
+    <input id="search" type="text" placeholder="Search venues…" autocomplete="off" inputmode="search">
+  </div>
+  <div class="chips" id="chips"></div>
+</header>
+
+<main id="content"></main>
+
+<button id="fab">+ Add menu</button>
+
+<!-- Add / Edit sheet -->
+<div class="scrim" id="scrim"></div>
+<div class="sheet" id="sheet-form" role="dialog" aria-modal="true">
+  <h2 id="form-title">Add menu</h2>
+  <div class="field">
+    <label for="f-name">Venue name</label>
+    <input type="text" id="f-name" placeholder="e.g. Masters of the Sea" autocomplete="off">
+  </div>
+  <div class="field-row">
+    <div class="field">
+      <label for="f-category">Category</label>
+      <select id="f-category">
+        <option>Restaurant</option>
+        <option>Specialty</option>
+        <option>Buffet</option>
+        <option>Bar</option>
+        <option>Lounge</option>
+        <option>Café</option>
+        <option>Other</option>
+      </select>
+    </div>
+    <div class="field">
+      <label for="f-deck">Deck</label>
+      <input type="number" id="f-deck" inputmode="numeric" placeholder="8" min="1" max="22">
+    </div>
+    <div class="field">
+      <label for="f-side">Side</label>
+      <select id="f-side">
+        <option value="">—</option>
+        <option value="Port">Port</option>
+        <option value="Starboard">Starboard</option>
+        <option value="Midship">Midship</option>
+        <option value="Forward">Forward</option>
+        <option value="Aft">Aft</option>
+      </select>
+    </div>
+  </div>
+  <div class="field">
+    <label for="f-notes">Notes</label>
+    <textarea id="f-notes" placeholder="e.g. included in drink package, opens 17:30"></textarea>
+  </div>
+  <div class="field pdf-pick">
+    <label>Menu PDF</label>
+    <button class="btn" id="btn-pick-file">Choose PDF from Files</button>
+    <input type="file" id="f-file" accept="application/pdf,.pdf" hidden>
+    <div class="divider-or">or fetch from URL</div>
+    <div class="url-row">
+      <input type="url" id="f-url" placeholder="https://… (from QR code)" autocomplete="off">
+      <button class="btn" id="btn-fetch-url">Fetch</button>
+    </div>
+    <div class="status" id="pdf-status">No PDF attached yet.</div>
+    <p class="hint">If fetching fails (some menu servers block it): open the QR link in Safari, tap Share → Save to Files, then attach it here with "Choose PDF from Files".</p>
+  </div>
+  <div class="btn-row">
+    <button class="btn" id="btn-cancel">Cancel</button>
+    <button class="btn primary" id="btn-save">Save menu</button>
+  </div>
+</div>
+
+<!-- Per-venue action sheet -->
+<div class="sheet action-sheet" id="sheet-actions" role="dialog" aria-modal="true">
+  <div class="venue-title" id="act-title"></div>
+  <div class="venue-sub" id="act-sub"></div>
+  <button class="btn primary" id="act-view">View menu</button>
+  <button class="btn" id="act-share">Share PDF</button>
+  <button class="btn" id="act-edit">Edit details</button>
+  <button class="btn danger" id="act-delete">Delete</button>
+</div>
+
+<!-- Viewer -->
+<div id="viewer">
+  <div class="viewer-bar">
+    <button class="icon-btn" id="viewer-close">Close</button>
+    <div class="vname" id="viewer-name"></div>
+    <button class="icon-btn" id="viewer-share">Share</button>
+  </div>
+  <div class="viewer-pages" id="viewer-pages"></div>
+</div>
+
+<div id="toast" role="status"></div>
+<input type="file" id="import-file" accept="application/json,.json" hidden>
+
+<script>
+"use strict";
+/* ============ IndexedDB ============ */
+const DB_NAME = "galley", STORE = "venues";
+let db;
+function openDB() {
+  return new Promise((res, rej) => {
+    const req = indexedDB.open(DB_NAME, 1);
+    req.onupgradeneeded = () => {
+      const d = req.result;
+      if (!d.objectStoreNames.contains(STORE)) {
+        const s = d.createObjectStore(STORE, { keyPath: "id", autoIncrement: true });
+        s.createIndex("nameLower", "nameLower", { unique: false });
+      }
+    };
+    req.onsuccess = () => { db = req.result; res(db); };
+    req.onerror = () => rej(req.error);
+  });
+}
+function tx(mode) { return db.transaction(STORE, mode).objectStore(STORE); }
+function dbAll() {
+  return new Promise((res, rej) => {
+    const r = tx("readonly").getAll();
+    r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error);
+  });
+}
+function dbPut(v) {
+  return new Promise((res, rej) => {
+    const r = tx("readwrite").put(v);
+    r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error);
+  });
+}
+function dbDelete(id) {
+  return new Promise((res, rej) => {
+    const r = tx("readwrite").delete(id);
+    r.onsuccess = () => res(); r.onerror = () => rej(r.error);
+  });
+}
+
+/* ============ State ============ */
+const CATEGORY_ORDER = ["Restaurant", "Specialty", "Buffet", "Bar", "Lounge", "Café", "Other"];
+let venues = [];
+let activeChip = "All";
+let searchTerm = "";
+let editingId = null;     // null = adding new
+let pendingPdf = null;    // Blob staged in the form
+let pendingPdfName = "";
+let actionVenue = null;
+
+const $ = (id) => document.getElementById(id);
+
+/* ============ Rendering ============ */
+function sideClass(side) {
+  if (side === "Port") return "port";
+  if (side === "Starboard") return "starboard";
+  return "midship";
+}
+function render() {
+  // chips
+  const present = [...new Set(venues.map(v => v.category))];
+  const cats = CATEGORY_ORDER.filter(c => present.includes(c));
+  const chipsEl = $("chips");
+  chipsEl.innerHTML = "";
+  ["All", ...cats].forEach(c => {
+    const b = document.createElement("button");
+    b.className = "chip" + (c === activeChip ? " active" : "");
+    b.textContent = c;
+    b.onclick = () => { activeChip = c; render(); };
+    chipsEl.appendChild(b);
+  });
+  if (!["All", ...cats].includes(activeChip)) activeChip = "All";
+
+  // filter
+  const q = searchTerm.trim().toLowerCase();
+  let shown = venues.filter(v =>
+    (activeChip === "All" || v.category === activeChip) &&
+    (!q || v.name.toLowerCase().includes(q) || (v.notes || "").toLowerCase().includes(q))
+  );
+
+  const main = $("content");
+  main.innerHTML = "";
+
+  if (venues.length === 0) {
+    main.innerHTML = `
+      <div class="empty">
+        <div class="light-row"><span class="light port"></span><span class="light midship"></span><span class="light starboard"></span></div>
+        <div class="display">No menus aboard yet</div>
+        <p>Scan a venue's QR code, open the menu, then add it here — from a saved file or straight from the URL.</p>
+        <p>Tap <strong>+ Add menu</strong> to begin.</p>
+      </div>`;
+    return;
+  }
+  if (shown.length === 0) {
+    main.innerHTML = `<div class="empty"><div class="display">Nothing matches</div><p>Try a different search or category.</p></div>`;
+    return;
+  }
+
+  CATEGORY_ORDER.forEach(cat => {
+    const inCat = shown.filter(v => v.category === cat)
+      .sort((a, b) => a.name.localeCompare(b.name));
+    if (!inCat.length) return;
+    const label = document.createElement("div");
+    label.className = "section-label";
+    label.textContent = cat;
+    main.appendChild(label);
+    const grid = document.createElement("div");
+    grid.className = "grid";
+    inCat.forEach(v => grid.appendChild(card(v)));
+    main.appendChild(grid);
+  });
+}
+function card(v) {
+  const el = document.createElement("div");
+  el.className = "card";
+  el.setAttribute("role", "button");
+  el.setAttribute("tabindex", "0");
+  const deck = v.deck ? `<span class="deck-tag">Deck ${v.deck}</span>` : "";
+  const side = v.side ? `<span class="side-tag"><span class="light ${sideClass(v.side)}"></span>${v.side}</span>` : "";
+  el.innerHTML = `
+    <div class="name">${escapeHtml(v.name)}</div>
+    ${v.notes ? `<div class="notes-line">${escapeHtml(v.notes)}</div>` : ""}
+    <div class="meta">${deck}${side}</div>
+    <button class="more" aria-label="More options">⋯</button>`;
+  el.onclick = (e) => {
+    if (e.target.classList.contains("more")) { openActions(v); return; }
+    viewPdf(v);
+  };
+  el.onkeydown = (e) => { if (e.key === "Enter") viewPdf(v); };
+  return el;
+}
+function escapeHtml(s) {
+  return String(s).replace(/[&<>"']/g, c => ({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;" }[c]));
+}
+
+/* ============ Sheets ============ */
+function openSheet(id) { $("scrim").classList.add("open"); $(id).classList.add("open"); }
+function closeSheets() {
+  $("scrim").classList.remove("open");
+  document.querySelectorAll(".sheet").forEach(s => s.classList.remove("open"));
+}
+$("scrim").onclick = closeSheets;
+
+/* ---- Add / Edit form ---- */
+function openForm(venue) {
+  editingId = venue ? venue.id : null;
+  pendingPdf = venue ? venue.pdf : null;
+  pendingPdfName = venue ? (venue.pdfName || "menu.pdf") : "";
+  $("form-title").textContent = venue ? "Edit menu" : "Add menu";
+  $("f-name").value = venue ? venue.name : "";
+  $("f-category").value = venue ? venue.category : "Restaurant";
+  $("f-deck").value = venue && venue.deck ? venue.deck : "";
+  $("f-side").value = venue ? (venue.side || "") : "";
+  $("f-notes").value = venue ? (venue.notes || "") : "";
+  $("f-url").value = "";
+  updatePdfStatus();
+  openSheet("sheet-form");
+}
+function updatePdfStatus() {
+  const s = $("pdf-status");
+  if (pendingPdf) {
+    s.textContent = `Attached: ${pendingPdfName} (${(pendingPdf.size / 1024).toFixed(0)} KB)`;
+    s.className = "status ok";
+  } else {
+    s.textContent = "No PDF attached yet.";
+    s.className = "status";
+  }
+}
+$("fab").onclick = () => openForm(null);
+$("btn-cancel").onclick = closeSheets;
+$("btn-pick-file").onclick = () => $("f-file").click();
+$("f-file").onchange = () => {
+  const f = $("f-file").files[0];
+  if (!f) return;
+  pendingPdf = f;
+  pendingPdfName = f.name;
+  if (!$("f-name").value) {
+    $("f-name").value = f.name.replace(/\.pdf$/i, "").replace(/[-_]+/g, " ");
+  }
+  updatePdfStatus();
+  $("f-file").value = "";
+};
+$("btn-fetch-url").onclick = async () => {
+  const url = $("f-url").value.trim();
+  if (!url) { toast("Paste the QR code URL first."); return; }
+  const btn = $("btn-fetch-url");
+  btn.disabled = true; btn.textContent = "…";
+  try {
+    const resp = await fetch(url, { mode: "cors" });
+    if (!resp.ok) throw new Error("HTTP " + resp.status);
+    const blob = await resp.blob();
+    if (blob.size === 0) throw new Error("empty response");
+    pendingPdf = blob;
+    pendingPdfName = (url.split("/").pop() || "menu").split("?")[0] || "menu.pdf";
+    updatePdfStatus();
+    toast("PDF fetched.");
+  } catch (err) {
+    toast("Couldn't fetch directly — save it to Files from Safari, then attach it here.");
+  } finally {
+    btn.disabled = false; btn.textContent = "Fetch";
+  }
+};
+$("btn-save").onclick = async () => {
+  const name = $("f-name").value.trim();
+  if (!name) { toast("Give the venue a name."); return; }
+  if (!pendingPdf) { toast("Attach the menu PDF first."); return; }
+
+  // Duplicate check (case-insensitive) when adding new
+  const dupe = venues.find(v => v.name.toLowerCase() === name.toLowerCase() && v.id !== editingId);
+  if (dupe) {
+    const replace = confirm(`"${dupe.name}" already exists. Replace it with this version?`);
+    if (!replace) return;
+    editingId = dupe.id;
+  }
+
+  const record = {
+    name,
+    nameLower: name.toLowerCase(),
+    category: $("f-category").value,
+    deck: $("f-deck").value ? parseInt($("f-deck").value, 10) : null,
+    side: $("f-side").value || null,
+    notes: $("f-notes").value.trim() || null,
+    pdf: pendingPdf,
+    pdfName: pendingPdfName || "menu.pdf",
+    addedAt: Date.now()
+  };
+  if (editingId !== null) record.id = editingId;
+  await dbPut(record);
+  venues = await dbAll();
+  closeSheets();
+  render();
+  toast(editingId !== null ? "Menu updated." : "Menu added.");
+};
+
+/* ---- Action sheet ---- */
+function openActions(v) {
+  actionVenue = v;
+  $("act-title").textContent = v.name;
+  $("act-sub").textContent = [v.category, v.deck ? "Deck " + v.deck : null, v.side].filter(Boolean).join(" · ");
+  openSheet("sheet-actions");
+}
+$("act-view").onclick = () => { closeSheets(); viewPdf(actionVenue); };
+$("act-edit").onclick = () => { closeSheets(); openForm(actionVenue); };
+$("act-delete").onclick = async () => {
+  if (!confirm(`Delete "${actionVenue.name}"?`)) return;
+  await dbDelete(actionVenue.id);
+  venues = await dbAll();
+  closeSheets();
+  render();
+  toast("Deleted.");
+};
+$("act-share").onclick = () => sharePdf(actionVenue);
+
+async function sharePdf(v) {
+  try {
+    const file = new File([v.pdf], (v.pdfName || v.name + ".pdf"), { type: "application/pdf" });
+    if (navigator.canShare && navigator.canShare({ files: [file] })) {
+      await navigator.share({ files: [file], title: v.name });
+    } else {
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(v.pdf);
+      a.download = file.name;
+      a.click();
+      setTimeout(() => URL.revokeObjectURL(a.href), 10000);
+    }
+  } catch (e) { /* user cancelled share */ }
+}
+
+/* ============ PDF viewer (pdf.js) ============ */
+if (window.pdfjsLib) {
+  pdfjsLib.GlobalWorkerOptions.workerSrc =
+    "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
+}
+let viewerVenue = null;
+async function viewPdf(v) {
+  viewerVenue = v;
+  $("viewer-name").textContent = v.name;
+  const pagesEl = $("viewer-pages");
+  pagesEl.innerHTML = `<div class="viewer-status">Loading menu…</div>`;
+  $("viewer").classList.add("open");
+  document.body.style.overflow = "hidden";
+
+  if (!window.pdfjsLib) {
+    pagesEl.innerHTML = `<div class="viewer-status">PDF renderer unavailable offline — it caches after one online load. You can still Share the PDF to open it elsewhere.</div>`;
+    return;
+  }
+  try {
+    const buf = await v.pdf.arrayBuffer();
+    const doc = await pdfjsLib.getDocument({ data: buf }).promise;
+    pagesEl.innerHTML = "";
+    const targetW = Math.min(pagesEl.clientWidth - 16, 900);
+    const dpr = Math.min(window.devicePixelRatio || 1, 2.5);
+    for (let i = 1; i <= doc.numPages; i++) {
+      const page = await doc.getPage(i);
+      const base = page.getViewport({ scale: 1 });
+      const scale = targetW / base.width;
+      const vp = page.getViewport({ scale: scale * dpr });
+      const canvas = document.createElement("canvas");
+      canvas.width = vp.width; canvas.height = vp.height;
+      canvas.style.width = (vp.width / dpr) + "px";
+      canvas.style.height = (vp.height / dpr) + "px";
+      pagesEl.appendChild(canvas);
+      await page.render({ canvasContext: canvas.getContext("2d"), viewport: vp }).promise;
+    }
+  } catch (err) {
+    pagesEl.innerHTML = `<div class="viewer-status">Couldn't render this PDF (${escapeHtml(err.message || String(err))}). Try Share to open it in another app.</div>`;
+  }
+}
+$("viewer-close").onclick = () => {
+  $("viewer").classList.remove("open");
+  $("viewer-pages").innerHTML = "";
+  document.body.style.overflow = "";
+};
+$("viewer-share").onclick = () => viewerVenue && sharePdf(viewerVenue);
+
+/* ============ Export / Import ============ */
+function blobToBase64(blob) {
+  return new Promise((res, rej) => {
+    const r = new FileReader();
+    r.onload = () => res(r.result.split(",")[1]);
+    r.onerror = () => rej(r.error);
+    r.readAsDataURL(blob);
+  });
+}
+function base64ToBlob(b64) {
+  const bytes = atob(b64);
+  const arr = new Uint8Array(bytes.length);
+  for (let i = 0; i < bytes.length; i++) arr[i] = bytes.charCodeAt(i);
+  return new Blob([arr], { type: "application/pdf" });
+}
+$("btn-export").onclick = async () => {
+  if (!venues.length) { toast("Nothing to export yet."); return; }
+  toast("Packing menus…");
+  const out = { app: "galley", version: 1, exportedAt: new Date().toISOString(), venues: [] };
+  for (const v of venues) {
+    out.venues.push({
+      name: v.name, category: v.category, deck: v.deck, side: v.side,
+      notes: v.notes, pdfName: v.pdfName, addedAt: v.addedAt,
+      pdfBase64: await blobToBase64(v.pdf)
+    });
+  }
+  const file = new File([JSON.stringify(out)],
+    `galley-export-${new Date().toISOString().slice(0,10)}.json`,
+    { type: "application/json" });
+  if (navigator.canShare && navigator.canShare({ files: [file] })) {
+    try { await navigator.share({ files: [file], title: "Galley menus" }); } catch (e) {}
+  } else {
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(file);
+    a.download = file.name;
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(a.href), 10000);
+  }
+};
+$("btn-import").onclick = () => $("import-file").click();
+$("import-file").onchange = async () => {
+  const f = $("import-file").files[0];
+  $("import-file").value = "";
+  if (!f) return;
+  try {
+    const data = JSON.parse(await f.text());
+    if (data.app !== "galley" || !Array.isArray(data.venues)) throw new Error("not a Galley export");
+    let added = 0, replaced = 0;
+    for (const inV of data.venues) {
+      const existing = venues.find(v => v.nameLower === inV.name.toLowerCase());
+      const record = {
+        name: inV.name, nameLower: inV.name.toLowerCase(),
+        category: CATEGORY_ORDER.includes(inV.category) ? inV.category : "Other",
+        deck: inV.deck ?? null, side: inV.side ?? null, notes: inV.notes ?? null,
+        pdf: base64ToBlob(inV.pdfBase64), pdfName: inV.pdfName || "menu.pdf",
+        addedAt: inV.addedAt || Date.now()
+      };
+      if (existing) { record.id = existing.id; replaced++; } else { added++; }
+      await dbPut(record);
+    }
+    venues = await dbAll();
+    render();
+    toast(`Imported: ${added} new, ${replaced} updated.`);
+  } catch (err) {
+    toast("That file isn't a Galley export.");
+  }
+};
+
+/* ============ Search ============ */
+$("search").oninput = (e) => { searchTerm = e.target.value; render(); };
+
+/* ============ Toast ============ */
+let toastTimer;
+function toast(msg) {
+  const t = $("toast");
+  t.textContent = msg;
+  t.classList.add("show");
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => t.classList.remove("show"), 3200);
+}
+
+/* ============ Boot ============ */
+(async function init() {
+  await openDB();
+  venues = await dbAll();
+  render();
+  if ("serviceWorker" in navigator) {
+    navigator.serviceWorker.register("./sw.js").catch(() => {});
+  }
+  if (navigator.storage && navigator.storage.persist) {
+    navigator.storage.persist().catch(() => {});
+  }
+})();
+</script>
+</body>
+</html>
