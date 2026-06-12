@@ -1,5 +1,5 @@
 "use strict";
-const CACHE = "galley-v1";
+const CACHE = "galley-v2";
 const PRECACHE = [
   "./",
   "./index.html",
@@ -8,6 +8,7 @@ const PRECACHE = [
   "./icon-512.png",
   "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js",
   "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js",
+  "https://cdnjs.cloudflare.com/ajax/libs/jsQR/1.4.0/jsQR.min.js",
   "https://fonts.googleapis.com/css2?family=Marcellus&display=swap"
 ];
 

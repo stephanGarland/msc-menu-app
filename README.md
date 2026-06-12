@@ -16,11 +16,10 @@ Any static host works. GitHub Pages is the path of least resistance:
 
 ## Daily use aboard
 
-1. Scan a venue’s QR code → menu PDF opens in Safari.
-1. Two ways to capture it:
-- **Fetch from URL** inside Galley (paste/share the link). Works when the menu server allows cross-origin requests — common for ship-LAN content, not guaranteed.
-- **Fallback (always works):** in Safari, Share → Save to Files. Then in Galley: + Add menu → Choose PDF from Files.
-1. Fill in name, category, deck, side (port/starboard shown as red/green running lights), notes. Saving a name that already exists offers to replace it instead of duplicating.
+1. **+ Add menu → Scan QR code** — point the camera at the venue’s QR code. The URL autofills and a direct fetch is attempted.
+1. If the fetch is blocked (CORS), tap **Open link in Safari**, Share → Save to Files, return, **Choose PDF from Files**.
+1. Naming and metadata are automatic where possible: filenames like `FIZZ CHAMPAGNE BAR FB.pdf` are cleaned to “Fizz Champagne Bar” and matched against a built-in MSC World Europa venue directory that autofills category and deck. Unrecognized venues get a category guess from keywords; if the app is genuinely unsure, a **Look up venue on the web** button opens a pre-filled search in Safari.
+1. Side (Port/Starboard/Midship, rendered as running lights) and Position (Forward/Amidships/Aft) are separate fields. Saving a name that already exists offers to replace it instead of duplicating.
 
 ## Sharing with friends
 
