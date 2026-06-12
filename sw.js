@@ -1,5 +1,5 @@
 "use strict";
-const CACHE = "galley-v4";
+const CACHE = "galley-v5";
 const PRECACHE = [
   "./",
   "./index.html",
@@ -38,6 +38,26 @@ self.addEventListener("fetch", (e) => {
   // Everything else (e.g. menu PDF fetches): network only — let the app handle failures.
   const url = new URL(req.url);
   if (url.pathname.endsWith("/bundle.json")) return; // always fresh from network
+
+  // HTML / navigations: network-first so deploys appear on the next load,
+  // falling back to cache when offline (mid-ocean).
+  const isShellOrigin = url.origin === self.location.origin;
+  const isHTML = req.mode === "navigate" ||
+    (isShellOrigin && (url.pathname.endsWith("/") || url.pathname.endsWith(".html")));
+  if (isHTML) {
+    e.respondWith(
+      fetch(req).then((resp) => {
+        if (resp && resp.ok) {
+          const clone = resp.clone();
+          caches.open(CACHE).then((c) => c.put(req, clone));
+        }
+        return resp;
+      }).catch(() =>
+        caches.match(req, { ignoreSearch: true }).then((c) => c || caches.match("./index.html"))
+      )
+    );
+    return;
+  }
   const isShell = url.origin === self.location.origin;
   const isVendor =
     url.hostname === "cdnjs.cloudflare.com" ||

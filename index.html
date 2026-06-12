@@ -345,7 +345,7 @@ textarea { resize: vertical; min-height: 60px; }
   <div class="masthead">
     <div>
       <h1>Galley</h1>
-      <p class="ship-name">MSC World Europa</p>
+      <p class="ship-name">MSC World Europa · <span id="ver"></span></p>
     </div>
     <div class="header-actions">
       <button class="icon-btn" id="btn-bundle" aria-label="Import shared bundle" hidden>Bundle</button>
@@ -483,6 +483,11 @@ textarea { resize: vertical; min-height: 60px; }
 
 <script>
 "use strict";
+const APP_VERSION = "5";
+/* Surface failures that would otherwise die silently on a phone */
+window.addEventListener("error", (e) => toast("Error: " + (e.message || "unknown")));
+window.addEventListener("unhandledrejection", (e) =>
+  toast("Error: " + (e.reason && (e.reason.message || e.reason) || "unknown")));
 /* ============ IndexedDB ============ */
 const DB_NAME = "galley", STORE = "venues";
 let db;
@@ -730,7 +735,7 @@ function card(v) {
   const deck = v.deck ? `<span class="deck-tag">Dk ${v.deck}</span>` : "";
   const side = v.side ? `<span class="side-tag"><span class="light ${sideClass(v.side)}"></span>${SIDE_ABBR[v.side] || v.side}</span>` : "";
   const pos = v.position ? `<span class="pos-tag">${POS_ABBR[v.position] || v.position}</span>` : "";
-  const count = v.menus.length > 1 ? `<span class="count-tag">${v.menus.length} menus</span>` : "";
+  const count = (v.menus || []).length > 1 ? `<span class="count-tag">${v.menus.length} menus</span>` : "";
   el.innerHTML = `
     <div class="name">${escapeHtml(v.name)}</div>
     ${v.notes ? `<div class="notes-line">${escapeHtml(v.notes)}</div>` : ""}
@@ -745,7 +750,7 @@ function card(v) {
 }
 /* Single menu: open it. Multiple: let the user pick. */
 function openVenue(v, mode = "view") {
-  if (!v.menus.length) { toast("No menus attached — add one via ⋯ → Edit."); return; }
+  if (!(v.menus || []).length) { toast("No menus attached — add one via ⋯ → Edit."); return; }
   if (v.menus.length === 1) {
     mode === "share" ? shareMenu(v, v.menus[0]) : viewPdf(v, v.menus[0]);
     return;
@@ -785,7 +790,7 @@ function openForm(venue) {
   editingId = venue ? venue.id : null;
   pendingPdf = null;
   pendingPdfName = "";
-  editMenus = venue ? venue.menus.map(m => ({ ...m })) : [];
+  editMenus = venue ? (venue.menus || []).map(m => ({ ...m })) : [];
   $("f-label").value = "";
   $("form-title").textContent = venue ? "Edit venue" : "Add menu";
   $("f-name").value = venue ? venue.name : "";
@@ -994,6 +999,7 @@ function scanLoop() {
   requestAnimationFrame(scanLoop);
 }
 $("btn-save").onclick = async () => {
+  try {
   const name = $("f-name").value.trim();
   if (!name) { toast("Give the venue a name."); return; }
 
@@ -1005,12 +1011,12 @@ $("btn-save").onclick = async () => {
   // Name matched another venue: merge into its menu set.
   // Otherwise use the staged set (empty when adding; honors removals when editing).
   let menus = (existing && base)
-    ? base.menus.map(m => ({ ...m }))
+    ? (base.menus || []).map(m => ({ ...m }))
     : editMenus.map(m => ({ ...m }));
 
   if (pendingPdf) {
     const label = $("f-label").value.trim() || (menus.length ? "Menu " + (menus.length + 1) : "Menu");
-    const clash = menus.findIndex(m => m.label.toLowerCase() === label.toLowerCase());
+    const clash = menus.findIndex(m => (m.label || "Menu").toLowerCase() === label.toLowerCase());
     if (clash >= 0) {
       if (!confirm(`"${name}" already has a "${menus[clash].label}" menu. Replace it?`)) return;
       menus[clash] = { label: menus[clash].label, blob: pendingPdf, pdfName: pendingPdfName || "menu.pdf", addedAt: Date.now() };
@@ -1038,6 +1044,9 @@ $("btn-save").onclick = async () => {
   closeSheets();
   render();
   toast(existing && pendingPdf ? `Added to ${name}.` : (editingId !== null ? "Saved." : "Menu added."));
+  } catch (err) {
+    toast("Save failed: " + (err.message || err));
+  }
 };
 
 /* ---- Action sheet ---- */
@@ -1262,6 +1271,7 @@ function toast(msg) {
     if (dirty) await dbPut(v);
   }
   render();
+  $("ver").textContent = "v" + APP_VERSION;
   detectBundle();
   if ("serviceWorker" in navigator) {
     navigator.serviceWorker.register("./sw.js").catch(() => {});
