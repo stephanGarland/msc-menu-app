@@ -133,16 +133,22 @@ main { padding: 8px 16px calc(120px + var(--safe-b)); }
 .card:active { border-color: var(--brass); }
 .card .name {
   font-family: "Marcellus", Georgia, serif;
-  font-size: 17px; line-height: 1.25; color: var(--foam);
-  word-break: break-word; padding-right: 24px;
+  font-size: 16px; line-height: 1.3; color: var(--foam);
+  overflow-wrap: break-word; padding-right: 18px;
 }
 .card .meta {
-  margin-top: auto; display: flex; align-items: center; gap: 10px;
-  font-size: 11.5px; color: var(--mist);
+  margin-top: auto; display: flex; align-items: center;
+  flex-wrap: wrap; gap: 4px 9px;
+  font-size: 10.5px; color: var(--mist);
 }
+.card .meta > span { white-space: nowrap; }
 .deck-tag {
   font-family: ui-monospace, "SF Mono", Menlo, monospace;
   letter-spacing: 0.08em; text-transform: uppercase;
+}
+.count-tag {
+  margin-left: auto; color: var(--brass);
+  letter-spacing: 0.06em; text-transform: uppercase;
 }
 .side-tag { display: inline-flex; align-items: center; gap: 5px; letter-spacing: 0.06em; text-transform: uppercase; }
 .pos-tag { letter-spacing: 0.06em; text-transform: uppercase; }
@@ -244,6 +250,20 @@ textarea { resize: vertical; min-height: 60px; }
 .url-row { display: flex; gap: 8px; }
 .url-row input { flex: 1; }
 .url-row .btn { width: auto; padding: 11px 16px; }
+
+/* ---------- Attached menus list (edit form) ---------- */
+.menu-list { display: flex; flex-direction: column; gap: 8px; margin-bottom: 6px; }
+.menu-list .menu-row {
+  display: flex; align-items: center; gap: 10px;
+  background: var(--ocean); border: 1px solid var(--hull-edge);
+  border-radius: 10px; padding: 9px 12px; font-size: 14px;
+}
+.menu-list .menu-row .lbl { flex: 1; color: var(--foam); }
+.menu-list .menu-row .sz { color: var(--mist); font-size: 12px; }
+.menu-list .menu-row .rm {
+  background: none; border: none; color: var(--danger);
+  font-size: 17px; line-height: 1; padding: 2px 6px; cursor: pointer;
+}
 
 /* ---------- Action sheet ---------- */
 .action-sheet .btn { margin-top: 10px; }
@@ -391,6 +411,14 @@ textarea { resize: vertical; min-height: 60px; }
     <label for="f-notes">Notes</label>
     <textarea id="f-notes" placeholder="e.g. included in drink package, opens 17:30"></textarea>
   </div>
+  <div class="field">
+    <label>Attached menus</label>
+    <div class="menu-list" id="menu-list"></div>
+  </div>
+  <div class="field">
+    <label for="f-label">Menu label</label>
+    <input type="text" id="f-label" placeholder="e.g. Food, Drinks, Wine list" autocomplete="off">
+  </div>
   <div class="field pdf-pick">
     <label>Menu PDF</label>
     <button class="btn primary" id="btn-scan">Scan QR code</button>
@@ -420,6 +448,13 @@ textarea { resize: vertical; min-height: 60px; }
   <button class="btn" id="act-share">Share PDF</button>
   <button class="btn" id="act-edit">Edit details</button>
   <button class="btn danger" id="act-delete">Delete</button>
+</div>
+
+<!-- Menu picker (venues with multiple menus) -->
+<div class="sheet action-sheet" id="sheet-picker" role="dialog" aria-modal="true">
+  <div class="venue-title" id="picker-title"></div>
+  <div class="venue-sub" id="picker-sub"></div>
+  <div id="picker-rows"></div>
 </div>
 
 <!-- QR Scanner -->
@@ -628,6 +663,8 @@ function sideClass(side) {
   if (side === "Starboard") return "starboard";
   return "midship";
 }
+const SIDE_ABBR = { Port: "Port", Starboard: "Stbd", Midship: "Mid" };
+const POS_ABBR  = { Forward: "Fwd", Amidships: "Amid", Aft: "Aft" };
 function render() {
   // chips
   const present = [...new Set(venues.map(v => v.category))];
@@ -687,20 +724,45 @@ function card(v) {
   el.className = "card";
   el.setAttribute("role", "button");
   el.setAttribute("tabindex", "0");
-  const deck = v.deck ? `<span class="deck-tag">Deck ${v.deck}</span>` : "";
-  const side = v.side ? `<span class="side-tag"><span class="light ${sideClass(v.side)}"></span>${v.side}</span>` : "";
-  const pos = v.position ? `<span class="pos-tag">${v.position}</span>` : "";
+  const deck = v.deck ? `<span class="deck-tag">Dk ${v.deck}</span>` : "";
+  const side = v.side ? `<span class="side-tag"><span class="light ${sideClass(v.side)}"></span>${SIDE_ABBR[v.side] || v.side}</span>` : "";
+  const pos = v.position ? `<span class="pos-tag">${POS_ABBR[v.position] || v.position}</span>` : "";
+  const count = v.menus.length > 1 ? `<span class="count-tag">${v.menus.length} menus</span>` : "";
   el.innerHTML = `
     <div class="name">${escapeHtml(v.name)}</div>
     ${v.notes ? `<div class="notes-line">${escapeHtml(v.notes)}</div>` : ""}
-    <div class="meta">${deck}${side}${pos}</div>
+    <div class="meta">${deck}${side}${pos}${count}</div>
     <button class="more" aria-label="More options">⋯</button>`;
   el.onclick = (e) => {
     if (e.target.classList.contains("more")) { openActions(v); return; }
-    viewPdf(v);
+    openVenue(v);
   };
-  el.onkeydown = (e) => { if (e.key === "Enter") viewPdf(v); };
+  el.onkeydown = (e) => { if (e.key === "Enter") openVenue(v); };
   return el;
+}
+/* Single menu: open it. Multiple: let the user pick. */
+function openVenue(v, mode = "view") {
+  if (!v.menus.length) { toast("No menus attached — add one via ⋯ → Edit."); return; }
+  if (v.menus.length === 1) {
+    mode === "share" ? shareMenu(v, v.menus[0]) : viewPdf(v, v.menus[0]);
+    return;
+  }
+  $("picker-title").textContent = v.name;
+  $("picker-sub").textContent = mode === "share" ? "Share which menu?" : "Open which menu?";
+  const rows = $("picker-rows");
+  rows.innerHTML = "";
+  v.menus.forEach(m => {
+    const b = document.createElement("button");
+    b.className = "btn" + (mode === "view" ? " primary" : "");
+    b.textContent = m.label;
+    b.onclick = () => {
+      closeSheets();
+      mode === "share" ? shareMenu(v, m) : viewPdf(v, m);
+    };
+    rows.appendChild(b);
+  });
+  closeSheets();
+  openSheet("sheet-picker");
 }
 function escapeHtml(s) {
   return String(s).replace(/[&<>"']/g, c => ({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;" }[c]));
@@ -715,11 +777,14 @@ function closeSheets() {
 $("scrim").onclick = closeSheets;
 
 /* ---- Add / Edit form ---- */
+let editMenus = []; // staged copy of the venue's menus while the form is open
 function openForm(venue) {
   editingId = venue ? venue.id : null;
-  pendingPdf = venue ? venue.pdf : null;
-  pendingPdfName = venue ? (venue.pdfName || "menu.pdf") : "";
-  $("form-title").textContent = venue ? "Edit menu" : "Add menu";
+  pendingPdf = null;
+  pendingPdfName = "";
+  editMenus = venue ? venue.menus.map(m => ({ ...m })) : [];
+  $("f-label").value = "";
+  $("form-title").textContent = venue ? "Edit venue" : "Add menu";
   $("f-name").value = venue ? venue.name : "";
   $("f-category").value = venue ? venue.category : "Restaurant";
   $("f-deck").value = venue && venue.deck ? venue.deck : "";
@@ -729,19 +794,42 @@ function openForm(venue) {
   $("btn-open-safari").hidden = true;
   $("f-notes").value = venue ? (venue.notes || "") : "";
   $("f-url").value = "";
+  renderMenuList();
   updatePdfStatus();
   openSheet("sheet-form");
+}
+function renderMenuList() {
+  const wrap = $("menu-list");
+  wrap.innerHTML = "";
+  const field = wrap.closest(".field");
+  field.style.display = editMenus.length ? "" : "none";
+  editMenus.forEach((m, i) => {
+    const row = document.createElement("div");
+    row.className = "menu-row";
+    row.innerHTML = `<span class="lbl">${escapeHtml(m.label)}</span>
+      <span class="sz">${(m.blob.size / 1024).toFixed(0)} KB</span>
+      <button class="rm" aria-label="Remove ${escapeHtml(m.label)}">✕</button>`;
+    row.querySelector(".rm").onclick = () => {
+      editMenus.splice(i, 1);
+      renderMenuList();
+    };
+    wrap.appendChild(row);
+  });
 }
 function updatePdfStatus() {
   const s = $("pdf-status");
   if (pendingPdf) {
-    s.textContent = `Attached: ${pendingPdfName} (${(pendingPdf.size / 1024).toFixed(0)} KB)`;
+    s.textContent = `Staged: ${pendingPdfName} (${(pendingPdf.size / 1024).toFixed(0)} KB) — saved as "${$("f-label").value.trim() || "Menu"}"`;
     s.className = "status ok";
+  } else if (editMenus.length) {
+    s.textContent = "No new PDF staged — existing menus above are kept.";
+    s.className = "status";
   } else {
     s.textContent = "No PDF attached yet.";
     s.className = "status";
   }
 }
+$("f-label").oninput = updatePdfStatus;
 $("fab").onclick = () => openForm(null);
 $("btn-cancel").onclick = closeSheets;
 $("btn-pick-file").onclick = () => $("f-file").click();
@@ -857,15 +945,30 @@ function scanLoop() {
 $("btn-save").onclick = async () => {
   const name = $("f-name").value.trim();
   if (!name) { toast("Give the venue a name."); return; }
-  if (!pendingPdf) { toast("Attach the menu PDF first."); return; }
 
-  // Duplicate check (case-insensitive) when adding new
-  const dupe = venues.find(v => v.name.toLowerCase() === name.toLowerCase() && v.id !== editingId);
-  if (dupe) {
-    const replace = confirm(`"${dupe.name}" already exists. Replace it with this version?`);
-    if (!replace) return;
-    editingId = dupe.id;
+  // If the name matches an existing venue, merge into it (no duplicates).
+  const existing = venues.find(v => v.nameLower === name.toLowerCase() && v.id !== editingId);
+  if (existing) editingId = existing.id;
+  const base = editingId !== null ? venues.find(v => v.id === editingId) : null;
+
+  // Name matched another venue: merge into its menu set.
+  // Otherwise use the staged set (empty when adding; honors removals when editing).
+  let menus = (existing && base)
+    ? base.menus.map(m => ({ ...m }))
+    : editMenus.map(m => ({ ...m }));
+
+  if (pendingPdf) {
+    const label = $("f-label").value.trim() || (menus.length ? "Menu " + (menus.length + 1) : "Menu");
+    const clash = menus.findIndex(m => m.label.toLowerCase() === label.toLowerCase());
+    if (clash >= 0) {
+      if (!confirm(`"${name}" already has a "${menus[clash].label}" menu. Replace it?`)) return;
+      menus[clash] = { label: menus[clash].label, blob: pendingPdf, pdfName: pendingPdfName || "menu.pdf", addedAt: Date.now() };
+    } else {
+      menus.push({ label, blob: pendingPdf, pdfName: pendingPdfName || "menu.pdf", addedAt: Date.now() });
+    }
   }
+
+  if (!menus.length) { toast("Attach a menu PDF first."); return; }
 
   const record = {
     name,
@@ -875,16 +978,15 @@ $("btn-save").onclick = async () => {
     side: $("f-side").value || null,
     position: $("f-position").value || null,
     notes: $("f-notes").value.trim() || null,
-    pdf: pendingPdf,
-    pdfName: pendingPdfName || "menu.pdf",
-    addedAt: Date.now()
+    menus,
+    addedAt: base ? base.addedAt : Date.now()
   };
   if (editingId !== null) record.id = editingId;
   await dbPut(record);
   venues = await dbAll();
   closeSheets();
   render();
-  toast(editingId !== null ? "Menu updated." : "Menu added.");
+  toast(existing && pendingPdf ? `Added to ${name}.` : (editingId !== null ? "Saved." : "Menu added."));
 };
 
 /* ---- Action sheet ---- */
@@ -894,7 +996,7 @@ function openActions(v) {
   $("act-sub").textContent = [v.category, v.deck ? "Deck " + v.deck : null, v.side, v.position].filter(Boolean).join(" · ");
   openSheet("sheet-actions");
 }
-$("act-view").onclick = () => { closeSheets(); viewPdf(actionVenue); };
+$("act-view").onclick = () => { closeSheets(); openVenue(actionVenue, "view"); };
 $("act-edit").onclick = () => { closeSheets(); openForm(actionVenue); };
 $("act-delete").onclick = async () => {
   if (!confirm(`Delete "${actionVenue.name}"?`)) return;
@@ -904,16 +1006,16 @@ $("act-delete").onclick = async () => {
   render();
   toast("Deleted.");
 };
-$("act-share").onclick = () => sharePdf(actionVenue);
+$("act-share").onclick = () => { openVenue(actionVenue, "share"); };
 
-async function sharePdf(v) {
+async function shareMenu(v, menu) {
   try {
-    const file = new File([v.pdf], (v.pdfName || v.name + ".pdf"), { type: "application/pdf" });
+    const file = new File([menu.blob], (menu.pdfName || v.name + ".pdf"), { type: "application/pdf" });
     if (navigator.canShare && navigator.canShare({ files: [file] })) {
-      await navigator.share({ files: [file], title: v.name });
+      await navigator.share({ files: [file], title: `${v.name} — ${menu.label}` });
     } else {
       const a = document.createElement("a");
-      a.href = URL.createObjectURL(v.pdf);
+      a.href = URL.createObjectURL(menu.blob);
       a.download = file.name;
       a.click();
       setTimeout(() => URL.revokeObjectURL(a.href), 10000);
@@ -926,10 +1028,11 @@ if (window.pdfjsLib) {
   pdfjsLib.GlobalWorkerOptions.workerSrc =
     "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
 }
-let viewerVenue = null;
-async function viewPdf(v) {
+let viewerVenue = null, viewerMenu = null;
+async function viewPdf(v, menu) {
   viewerVenue = v;
-  $("viewer-name").textContent = v.name;
+  viewerMenu = menu;
+  $("viewer-name").textContent = v.menus.length > 1 ? `${v.name} — ${menu.label}` : v.name;
   const pagesEl = $("viewer-pages");
   pagesEl.innerHTML = `<div class="viewer-status">Loading menu…</div>`;
   $("viewer").classList.add("open");
@@ -940,7 +1043,7 @@ async function viewPdf(v) {
     return;
   }
   try {
-    const buf = await v.pdf.arrayBuffer();
+    const buf = await menu.blob.arrayBuffer();
     const doc = await pdfjsLib.getDocument({ data: buf }).promise;
     pagesEl.innerHTML = "";
     const targetW = Math.min(pagesEl.clientWidth - 16, 900);
@@ -966,7 +1069,7 @@ $("viewer-close").onclick = () => {
   $("viewer-pages").innerHTML = "";
   document.body.style.overflow = "";
 };
-$("viewer-share").onclick = () => viewerVenue && sharePdf(viewerVenue);
+$("viewer-share").onclick = () => viewerVenue && viewerMenu && shareMenu(viewerVenue, viewerMenu);
 
 /* ============ Export / Import ============ */
 function blobToBase64(blob) {
@@ -986,12 +1089,15 @@ function base64ToBlob(b64) {
 $("btn-export").onclick = async () => {
   if (!venues.length) { toast("Nothing to export yet."); return; }
   toast("Packing menus…");
-  const out = { app: "galley", version: 1, exportedAt: new Date().toISOString(), venues: [] };
+  const out = { app: "galley", version: 2, exportedAt: new Date().toISOString(), venues: [] };
   for (const v of venues) {
+    const menus = [];
+    for (const m of v.menus) {
+      menus.push({ label: m.label, pdfName: m.pdfName, addedAt: m.addedAt, pdfBase64: await blobToBase64(m.blob) });
+    }
     out.venues.push({
       name: v.name, category: v.category, deck: v.deck, side: v.side, position: v.position ?? null,
-      notes: v.notes, pdfName: v.pdfName, addedAt: v.addedAt,
-      pdfBase64: await blobToBase64(v.pdf)
+      notes: v.notes, addedAt: v.addedAt, menus
     });
   }
   const file = new File([JSON.stringify(out)],
@@ -1018,12 +1124,22 @@ $("import-file").onchange = async () => {
     let added = 0, replaced = 0;
     for (const inV of data.venues) {
       const existing = venues.find(v => v.nameLower === inV.name.toLowerCase());
+      // v1 exports carried a single pdfBase64; v2 carries a menus array
+      const inMenus = Array.isArray(inV.menus)
+        ? inV.menus.map(m => ({ label: m.label || "Menu", blob: base64ToBlob(m.pdfBase64), pdfName: m.pdfName || "menu.pdf", addedAt: m.addedAt || Date.now() }))
+        : [{ label: "Menu", blob: base64ToBlob(inV.pdfBase64), pdfName: inV.pdfName || "menu.pdf", addedAt: inV.addedAt || Date.now() }];
+      // Merge: incoming menus replace same-label menus, others are kept
+      let menus = existing ? existing.menus.map(m => ({ ...m })) : [];
+      for (const im of inMenus) {
+        const i = menus.findIndex(m => m.label.toLowerCase() === im.label.toLowerCase());
+        if (i >= 0) menus[i] = im; else menus.push(im);
+      }
       const record = {
         name: inV.name, nameLower: inV.name.toLowerCase(),
         category: CATEGORY_ORDER.includes(inV.category) ? inV.category : "Other",
         deck: inV.deck ?? null, side: inV.side ?? null,
         position: inV.position ?? null, notes: inV.notes ?? null,
-        pdf: base64ToBlob(inV.pdfBase64), pdfName: inV.pdfName || "menu.pdf",
+        menus,
         addedAt: inV.addedAt || Date.now()
       };
       if (existing) { record.id = existing.id; replaced++; } else { added++; }
@@ -1054,13 +1170,20 @@ function toast(msg) {
 (async function init() {
   await openDB();
   venues = await dbAll();
-  // Migrate legacy records where Forward/Aft were stored as a side
+  // Migrations: single-PDF records -> menus[]; Forward/Aft stored as a side -> position
   for (const v of venues) {
+    let dirty = false;
+    if (!Array.isArray(v.menus)) {
+      v.menus = v.pdf ? [{ label: "Menu", blob: v.pdf, pdfName: v.pdfName || "menu.pdf", addedAt: v.addedAt }] : [];
+      delete v.pdf; delete v.pdfName;
+      dirty = true;
+    }
     if (v.side === "Forward" || v.side === "Aft") {
       v.position = v.side;
       v.side = null;
-      await dbPut(v);
+      dirty = true;
     }
+    if (dirty) await dbPut(v);
   }
   render();
   if ("serviceWorker" in navigator) {

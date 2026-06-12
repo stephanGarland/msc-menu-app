@@ -19,7 +19,8 @@ Any static host works. GitHub Pages is the path of least resistance:
 1. **+ Add menu → Scan QR code** — point the camera at the venue’s QR code. The URL autofills and a direct fetch is attempted.
 1. If the fetch is blocked (CORS), tap **Open link in Safari**, Share → Save to Files, return, **Choose PDF from Files**.
 1. Naming and metadata are automatic where possible: filenames like `FIZZ CHAMPAGNE BAR FB.pdf` are cleaned to “Fizz Champagne Bar” and matched against a built-in MSC World Europa venue directory that autofills category and deck. Unrecognized venues get a category guess from keywords; if the app is genuinely unsure, a **Look up venue on the web** button opens a pre-filled search in Safari.
-1. Side (Port/Starboard/Midship, rendered as running lights) and Position (Forward/Amidships/Aft) are separate fields. Saving a name that already exists offers to replace it instead of duplicating.
+1. Side (Port/Starboard/Midship, rendered as running lights) and Position (Forward/Amidships/Aft) are separate fields.
+1. **Multiple menus per venue:** give each PDF a label (Food, Drinks, Wine list…). Saving with an existing venue name merges into that venue — a new label adds a menu, a matching label asks before replacing. Cards with several menus show a count and open a picker; ⋯ → Edit lists attached menus with per-menu removal.
 
 ## Sharing with friends
 
