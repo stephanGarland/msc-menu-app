@@ -1,5 +1,5 @@
 "use strict";
-const CACHE = "galley-v3";
+const CACHE = "galley-v4";
 const PRECACHE = [
   "./",
   "./index.html",
@@ -9,6 +9,7 @@ const PRECACHE = [
   "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js",
   "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js",
   "https://cdnjs.cloudflare.com/ajax/libs/jsQR/1.4.0/jsQR.min.js",
+  "https://cdnjs.cloudflare.com/ajax/libs/pdf-lib/1.17.1/pdf-lib.min.js",
   "https://fonts.googleapis.com/css2?family=Marcellus&display=swap"
 ];
 
@@ -36,6 +37,7 @@ self.addEventListener("fetch", (e) => {
   // Fonts/pdf.js: cache-first (versioned URLs, immutable in practice).
   // Everything else (e.g. menu PDF fetches): network only — let the app handle failures.
   const url = new URL(req.url);
+  if (url.pathname.endsWith("/bundle.json")) return; // always fresh from network
   const isShell = url.origin === self.location.origin;
   const isVendor =
     url.hostname === "cdnjs.cloudflare.com" ||

@@ -19,6 +19,7 @@
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jsQR/1.4.0/jsQR.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf-lib/1.17.1/pdf-lib.min.js"></script>
 
 <style>
 :root {
@@ -347,6 +348,7 @@ textarea { resize: vertical; min-height: 60px; }
       <p class="ship-name">MSC World Europa</p>
     </div>
     <div class="header-actions">
+      <button class="icon-btn" id="btn-bundle" aria-label="Import shared bundle" hidden>Bundle</button>
       <button class="icon-btn" id="btn-export" aria-label="Export all menus">Export</button>
       <button class="icon-btn" id="btn-import" aria-label="Import menus">Import</button>
     </div>
@@ -431,6 +433,7 @@ textarea { resize: vertical; min-height: 60px; }
     </div>
     <a class="btn" id="btn-open-safari" target="_blank" rel="noopener" hidden>Open link in Safari</a>
     <div class="status" id="pdf-status">No PDF attached yet.</div>
+    <button class="btn" id="btn-compress" hidden>Compress PDF</button>
     <p class="hint">If a direct fetch is blocked: open the link in Safari, tap Share → Save to Files, then attach it here with "Choose PDF from Files".</p>
     <button class="btn" id="btn-lookup" hidden>Look up venue on the web</button>
   </div>
@@ -818,6 +821,9 @@ function renderMenuList() {
 }
 function updatePdfStatus() {
   const s = $("pdf-status");
+  $("btn-compress").hidden = !(
+    pendingPdf && pendingPdf.size > 400 * 1024 && window.PDFLib && window.pdfjsLib
+  );
   if (pendingPdf) {
     s.textContent = `Staged: ${pendingPdfName} (${(pendingPdf.size / 1024).toFixed(0)} KB) — saved as "${$("f-label").value.trim() || "Menu"}"`;
     s.className = "status ok";
@@ -841,6 +847,51 @@ $("f-file").onchange = () => {
   applyAutoFill(f.name);
   updatePdfStatus();
   $("f-file").value = "";
+};
+/* Rasterize pages and rebuild as a JPEG-page PDF. Loses text selection,
+   shrinks image-heavy menus dramatically. Keeps whichever blob is smaller. */
+async function compressPdf(blob, targetWidth = 1400, quality = 0.72) {
+  const buf = await blob.arrayBuffer();
+  const srcDoc = await pdfjsLib.getDocument({ data: buf }).promise;
+  const out = await PDFLib.PDFDocument.create();
+  const canvas = document.createElement("canvas");
+  const ctx = canvas.getContext("2d");
+  for (let i = 1; i <= srcDoc.numPages; i++) {
+    const page = await srcDoc.getPage(i);
+    const base = page.getViewport({ scale: 1 });
+    const scale = Math.min(targetWidth / base.width, 3);
+    const vp = page.getViewport({ scale });
+    canvas.width = vp.width; canvas.height = vp.height;
+    ctx.fillStyle = "#ffffff"; ctx.fillRect(0, 0, vp.width, vp.height);
+    await page.render({ canvasContext: ctx, viewport: vp }).promise;
+    const jpegBlob = await new Promise((res) => canvas.toBlob(res, "image/jpeg", quality));
+    const jpg = await out.embedJpg(await jpegBlob.arrayBuffer());
+    const p = out.addPage([base.width, base.height]);
+    p.drawImage(jpg, { x: 0, y: 0, width: base.width, height: base.height });
+  }
+  canvas.width = canvas.height = 0;
+  const bytes = await out.save();
+  return new Blob([bytes], { type: "application/pdf" });
+}
+$("btn-compress").onclick = async () => {
+  if (!pendingPdf) return;
+  const btn = $("btn-compress");
+  btn.disabled = true; btn.textContent = "Compressing…";
+  try {
+    const before = pendingPdf.size;
+    const result = await compressPdf(pendingPdf);
+    if (result.size < before * 0.9) {
+      pendingPdf = result;
+      toast(`Compressed: ${(before / 1048576).toFixed(1)} MB → ${(result.size / 1024).toFixed(0)} KB.`);
+    } else {
+      toast("Already efficient — kept the original.");
+    }
+    updatePdfStatus();
+  } catch (err) {
+    toast("Compression failed — kept the original.");
+  } finally {
+    btn.disabled = false; btn.textContent = "Compress PDF";
+  }
 };
 $("btn-lookup").onclick = () => {
   const name = $("f-name").value.trim();
@@ -1120,6 +1171,33 @@ $("import-file").onchange = async () => {
   if (!f) return;
   try {
     const data = JSON.parse(await f.text());
+    await importData(data);
+  } catch (err) {
+    toast("That file isn't a Galley export.");
+  }
+};
+/* Shared bundle hosted alongside the app (bundle.json in the repo) */
+async function detectBundle() {
+  try {
+    const r = await fetch("./bundle.json", { method: "HEAD", cache: "no-store" });
+    if (r.ok) $("btn-bundle").hidden = false;
+  } catch (e) { /* none hosted, or offline */ }
+}
+$("btn-bundle").onclick = async () => {
+  const btn = $("btn-bundle");
+  btn.disabled = true;
+  try {
+    const r = await fetch("./bundle.json", { cache: "no-store" });
+    if (!r.ok) throw new Error("HTTP " + r.status);
+    await importData(await r.json());
+  } catch (err) {
+    toast("Couldn't load the shared bundle.");
+  } finally {
+    btn.disabled = false;
+  }
+};
+async function importData(data) {
+  {
     if (data.app !== "galley" || !Array.isArray(data.venues)) throw new Error("not a Galley export");
     let added = 0, replaced = 0;
     for (const inV of data.venues) {
@@ -1148,10 +1226,8 @@ $("import-file").onchange = async () => {
     venues = await dbAll();
     render();
     toast(`Imported: ${added} new, ${replaced} updated.`);
-  } catch (err) {
-    toast("That file isn't a Galley export.");
   }
-};
+}
 
 /* ============ Search ============ */
 $("search").oninput = (e) => { searchTerm = e.target.value; render(); };
@@ -1186,6 +1262,7 @@ function toast(msg) {
     if (dirty) await dbPut(v);
   }
   render();
+  detectBundle();
   if ("serviceWorker" in navigator) {
     navigator.serviceWorker.register("./sw.js").catch(() => {});
   }
