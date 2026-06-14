@@ -1,5 +1,5 @@
 "use strict";
-const CACHE = "galley-v5";
+const CACHE = "galley-v6";
 const PRECACHE = [
   "./",
   "./index.html",

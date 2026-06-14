@@ -22,6 +22,10 @@ Any static host works. GitHub Pages is the path of least resistance:
 1. Side (Port/Starboard/Midship, rendered as running lights) and Position (Forward/Amidships/Aft) are separate fields.
 1. **Multiple menus per venue:** give each PDF a label (Food, Drinks, Wine list…). Saving with an existing venue name merges into that venue — a new label adds a menu, a matching label asks before replacing. Cards with several menus show a count and open a picker; ⋯ → Edit lists attached menus with per-menu removal.
 
+## Menus that come as images
+
+Some venues’ QR codes resolve to a stack of PNGs (or JPEGs) rather than a PDF. In **+ Add menu → Choose PDF or images from Files**, select all the images at once — the app re-encodes them as JPEG at phone resolution and assembles a single PDF, ordered by filename (natural sort, so `page_2` precedes `page_10`). This doubles as compression: lossless PNGs of a photographed menu shrink substantially in the process.
+
 ## Large PDFs
 
 ZIP barely helps with PDFs — their internals are already Flate-compressed. The app has a **Compress PDF** button (appears when a staged PDF exceeds ~400 KB) that re-renders each page as a JPEG at phone resolution and rebuilds the document. Image-heavy 5 MB menus typically shrink 5–10×; the output loses text selection, and if the original was already lean the app keeps it. On a desktop later, Ghostscript’s `gs -sDEVICE=pdfwrite -dPDFSETTINGS=/ebook` achieves similar results without rasterizing.

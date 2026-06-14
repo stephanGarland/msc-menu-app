@@ -424,8 +424,8 @@ textarea { resize: vertical; min-height: 60px; }
   <div class="field pdf-pick">
     <label>Menu PDF</label>
     <button class="btn primary" id="btn-scan">Scan QR code</button>
-    <button class="btn" id="btn-pick-file">Choose PDF from Files</button>
-    <input type="file" id="f-file" accept="application/pdf,.pdf" hidden>
+    <button class="btn" id="btn-pick-file">Choose PDF or images from Files</button>
+    <input type="file" id="f-file" accept="application/pdf,.pdf,image/png,image/jpeg,.png,.jpg,.jpeg" multiple hidden>
     <div class="divider-or">or fetch from URL</div>
     <div class="url-row">
       <input type="url" id="f-url" placeholder="https://… (from QR code)" autocomplete="off">
@@ -483,7 +483,7 @@ textarea { resize: vertical; min-height: 60px; }
 
 <script>
 "use strict";
-const APP_VERSION = "5";
+const APP_VERSION = "6";
 /* Surface failures that would otherwise die silently on a phone */
 window.addEventListener("error", (e) => toast("Error: " + (e.message || "unknown")));
 window.addEventListener("unhandledrejection", (e) =>
@@ -844,15 +844,81 @@ $("f-label").oninput = updatePdfStatus;
 $("fab").onclick = () => openForm(null);
 $("btn-cancel").onclick = closeSheets;
 $("btn-pick-file").onclick = () => $("f-file").click();
-$("f-file").onchange = () => {
-  const f = $("f-file").files[0];
-  if (!f) return;
+$("f-file").onchange = async () => {
+  const files = Array.from($("f-file").files || []);
+  $("f-file").value = "";
+  if (!files.length) return;
+
+  const images = files.filter(f => /^image\//.test(f.type) || /\.(png|jpe?g)$/i.test(f.name));
+  const pdfs = files.filter(f => f.type === "application/pdf" || /\.pdf$/i.test(f.name));
+
+  if (images.length && !pdfs.length) {
+    // One or many images -> assemble a single compressed PDF.
+    if (!window.PDFLib) { toast("Image conversion needs one online load first."); return; }
+    const btn = $("btn-pick-file");
+    const restore = btn.textContent;
+    btn.disabled = true;
+    btn.textContent = images.length > 1 ? `Combining ${images.length} images…` : "Converting image…";
+    try {
+      // Natural sort by filename so page_2 precedes page_10.
+      images.sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: "base" }));
+      pendingPdf = await imagesToPdf(images);
+      const stem = images.length > 1 ? baseNameFrom(images[0].name) : images[0].name.replace(/\.[a-z0-9]+$/i, "");
+      pendingPdfName = (stem || "menu") + ".pdf";
+      applyAutoFill(stem || images[0].name);
+      toast(`Built a ${images.length}-page PDF (${(pendingPdf.size / 1024).toFixed(0)} KB).`);
+    } catch (err) {
+      toast("Couldn't convert those images: " + (err.message || err));
+    } finally {
+      btn.disabled = false; btn.textContent = restore;
+      updatePdfStatus();
+    }
+    return;
+  }
+
+  // PDF path (first PDF wins; ignore any stray images alongside it).
+  const f = pdfs[0] || files[0];
   pendingPdf = f;
   pendingPdfName = f.name;
   applyAutoFill(f.name);
   updatePdfStatus();
-  $("f-file").value = "";
 };
+/* Strip a trailing page/index suffix so "fizz-drinks-1.png" -> "fizz-drinks". */
+function baseNameFrom(filename) {
+  return filename.replace(/\.[a-z0-9]+$/i, "").replace(/[\s_-]*\d+$/, "").trim() || "menu";
+}
+/* Load a File into an HTMLImageElement. */
+function loadImage(file) {
+  return new Promise((res, rej) => {
+    const url = URL.createObjectURL(file);
+    const img = new Image();
+    img.onload = () => { URL.revokeObjectURL(url); res(img); };
+    img.onerror = () => { URL.revokeObjectURL(url); rej(new Error("bad image: " + file.name)); };
+    img.src = url;
+  });
+}
+/* Re-encode images as JPEG at phone resolution and assemble one PDF. */
+async function imagesToPdf(files, targetWidth = 1400, quality = 0.72) {
+  const out = await PDFLib.PDFDocument.create();
+  const canvas = document.createElement("canvas");
+  const ctx = canvas.getContext("2d");
+  for (const file of files) {
+    const img = await loadImage(file);
+    const scale = Math.min(targetWidth / img.naturalWidth, 1); // never upscale
+    const w = Math.round(img.naturalWidth * scale);
+    const h = Math.round(img.naturalHeight * scale);
+    canvas.width = w; canvas.height = h;
+    ctx.fillStyle = "#ffffff"; ctx.fillRect(0, 0, w, h);
+    ctx.drawImage(img, 0, 0, w, h);
+    const jpegBlob = await new Promise((r) => canvas.toBlob(r, "image/jpeg", quality));
+    const jpg = await out.embedJpg(await jpegBlob.arrayBuffer());
+    const page = out.addPage([w, h]);
+    page.drawImage(jpg, { x: 0, y: 0, width: w, height: h });
+  }
+  canvas.width = canvas.height = 0;
+  const bytes = await out.save();
+  return new Blob([bytes], { type: "application/pdf" });
+}
 /* Rasterize pages and rebuild as a JPEG-page PDF. Loses text selection,
    shrinks image-heavy menus dramatically. Keeps whichever blob is smaller. */
 async function compressPdf(blob, targetWidth = 1400, quality = 0.72) {
